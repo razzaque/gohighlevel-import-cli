@@ -5,7 +5,7 @@ import logging
 import time
 import os
 from dotenv import load_dotenv
-from gohighlevel_import_cli.models import Task, Note
+from gohighlevel_import_cli.models import Contact, Task, Note
 
 class GoHighLevelClient:
     def __init__(self, api_key=None, location_id=None, dry_run=True):
@@ -15,7 +15,8 @@ class GoHighLevelClient:
         self.api_version = "2021-07-28"
         self.token = api_key or os.getenv("GHL_PRIVATE_INTEGRATION_TOKEN")
         self.location_id = location_id or os.getenv("GHL_LOCATION_ID")
-
+        self.user_cache = {}  # Cache for user data
+        
         if not self.token:
             raise ValueError("GHL_PRIVATE_INTEGRATION_TOKEN is not set in the environment variables.")
         if not self.location_id:
@@ -50,6 +51,28 @@ class GoHighLevelClient:
                 time.sleep(2 ** attempt)
         raise Exception("API request failed after 3 attempts.")
 
+    def resolve_user_id(self, full_name):
+        if full_name in self.user_cache:
+            return self.user_cache[full_name]
+
+        url = f"{self.base_url}/users/"
+        params = {"locationId": self.location_id}
+        try:
+            result = self._make_request("GET", url, params=params)
+            for user in result.get("users", []):
+                user_name = f"{user.get('firstName', '').strip()} {user.get('lastName', '').strip()}".strip()
+                if user_name.lower() == full_name.lower():
+                    user_id = user.get("id")
+                    self.user_cache[full_name] = user_id
+                    logging.info(f"Matched user '{full_name}' to ID {user_id}")
+                    return user_id
+            logging.warning(f"No user match found for '{full_name}'")
+            self.user_cache[full_name] = None
+            return None
+        except Exception as e:
+            logging.error(f"Error resolving user '{full_name}': {e}")
+            return None
+
     def find_contact_by_email(self, email):
         url = f"{self.base_url}/contacts/search"
         payload = {
@@ -66,28 +89,65 @@ class GoHighLevelClient:
         }
         logging.debug(f"Sending contact search payload: {payload}")
         result = self._make_request("POST", url, json=payload)
-        return result.get("contacts", [None])[0]
+        contacts = result.get("contacts", [])
+        return contacts[0] if contacts else None
 
-    def create_task(self, contact_id, task: Task):
+    def create_task(self, contact_id, task: Task, completed=False, assigned_to=None):
         payload = {
             "title": task.subject,
             "dueDate": task.due_date,
-            "completed": False
+            "completed": completed,
         }
+        if assigned_to:
+            payload["assignedTo"] = assigned_to
         if self.dry_run:
             logging.info(f"[DRY RUN] Would create task: {payload}")
             return payload
         else:
             url = f"{self.base_url}/contacts/{contact_id}/tasks"
-            return self._make_request("POST", url, json=payload)
+            response = self._make_request("POST", url, json=payload)
+            logging.info(f"Created task: {response}")
+            return response
 
-    def create_note(self, contact_id, note: Note):
+    def create_note(self, contact_id, note: Note, assigned_to=None):
         payload = {
             "body": note.content
         }
+        if assigned_to:
+            payload["assignedTo"] = assigned_to
         if self.dry_run:
             logging.info(f"[DRY RUN] Would create note: {payload}")
             return payload
         else:
             url = f"{self.base_url}/contacts/{contact_id}/notes"
-            return self._make_request("POST", url, json=payload)
+            response = self._make_request("POST", url, json=payload)
+            logging.info(f"Created note: {response}")
+            return response
+
+    def create_contact(self, contact: Contact):
+        payload = {
+            "email": contact.email,
+            "firstName": contact.first_name,
+            "lastName": contact.last_name,
+            "companyName": contact.business_name,
+            "phone": contact.phone,
+            "additionalPhones": contact.additional_phones,
+            "address1": contact.address.get("street"),
+            "city": contact.address.get("city"),
+            "state": contact.address.get("state"),
+            "postalCode": contact.address.get("postalCode"),
+            "country": contact.address.get("country"),
+        }
+
+        # Remove empty fields
+        payload = {k: v for k, v in payload.items() if v}
+        logging.info(f"Creating contact: {payload}")
+
+        if self.dry_run:
+            logging.info(f"[DRY RUN] Would create contact: {payload}")
+            return {"id": f"mock-{contact.email}"}
+        else:
+            url = f"{self.base_url}/contacts/"
+            response = self._make_request("POST", url, json=payload)
+            logging.info(f"Created contact: {response}")
+            return response

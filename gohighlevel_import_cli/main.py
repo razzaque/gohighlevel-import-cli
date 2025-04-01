@@ -6,14 +6,12 @@ import os
 from dotenv import load_dotenv
 from gohighlevel_import_cli.importer import Importer
 
-
-
 def setup_logger():
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[
-            logging.FileHandler("import_log.log"),
+            logging.FileHandler("import_log.log", encoding="utf-8"),
             logging.StreamHandler()
         ]
     )
@@ -30,6 +28,8 @@ def main():
     parser.add_argument("--tasks", help="Path to Zoho Tasks Excel file")
     parser.add_argument("--notes", help="Path to Zoho Notes Excel file")
     parser.add_argument("--live", action="store_true", help="If set, send data to GoHighLevel")
+    parser.add_argument("--limit", type=int, help="Limit the number of contacts to process")
+
     args = parser.parse_args()
 
     importer = Importer(
@@ -38,7 +38,8 @@ def main():
         contacts_path=args.contacts or os.getenv("CONTACTS_PATH"),
         tasks_path=args.tasks or os.getenv("TASKS_PATH"),
         notes_path=args.notes or os.getenv("NOTES_PATH"),
-        dry_run=not args.live
+        dry_run=not args.live,
+        limit=args.limit
     )
 
     importer.run()
