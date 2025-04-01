@@ -1,7 +1,0 @@
-{
-    "terminal.integrated.env.windows": {
-      "PYTHONPATH": "${workspaceFolder}"
-    },
-    "python.envFile": "${workspaceFolder}/.env"
-  }
-  
