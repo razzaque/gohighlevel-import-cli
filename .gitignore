@@ -11,3 +11,6 @@ __pycache__/
 
 # Ignore Excel files and data
 *.xlsx
+
+# Ignore data folder and files
+data/

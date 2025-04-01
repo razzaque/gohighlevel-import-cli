@@ -1,8 +1,9 @@
 # tests/test_importer.py
 
 import unittest
-from models import Contact, Task, Note
-from gohighlevel_client import GoHighLevelClient
+from gohighlevel_import_cli.models import Contact, Task, Note
+from gohighlevel_import_cli.gohighlevel_client import GoHighLevelClient
+
 
 class TestModels(unittest.TestCase):
 
